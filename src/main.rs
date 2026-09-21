@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use dotenvy::dotenv;
-use sqlx::any::{AnyPool, AnyPoolOptions};
+use sqlx::any::AnyPoolOptions;
+use sqlx::AnyPool;
 use std::env;
 use tracing::{info, warn};
 // use rumqttd::{Broker, Config};
