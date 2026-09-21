@@ -1,0 +1,45 @@
+# Optional. Both sections below are opt-in: if this file is absent (or a
+# section is empty), CatHub runs with no Modbus devices and no alert rules.
+# Copy this file to `cathub.toml` in the working directory and edit as needed.
+
+# --- Modbus TCP -> MQTT bridge -------------------------------------------
+# Each [[modbus]] block polls one Modbus TCP device on an interval and
+# republishes each configured register's reading as an MQTT message, so it
+# flows through the same ingestion/dedup/vault/SSE/alert pipeline as any
+# native MQTT publisher.
+
+[[modbus]]
+name = "line1-plc"
+address = "192.168.1.50:502"   # Modbus TCP gateway address
+slave_id = 1                   # default: 1
+poll_interval_ms = 5000        # default: 5000
+
+# Each register reads `quantity` holding registers (function code 0x03)
+# starting at `address`, and publishes:
+#   {"device": "line1-plc", "register": "temperature",
+#    "value": <first register, or null>, "values": [...], "ts": "..."}
+[[modbus.registers]]
+name = "temperature"
+address = 0
+quantity = 1                   # default: 1
+topic = "factory/line1/temperature"
+
+[[modbus.registers]]
+name = "pressure"
+address = 2
+topic = "factory/line1/pressure"
+
+# --- Alert rules -----------------------------------------------------------
+# Each [[alerts]] block watches one exact MQTT topic (no "+"/"#" wildcards
+# yet) and compares a top-level numeric field in its JSON payload against a
+# threshold. Firing is edge-triggered: a rule fires once when it crosses the
+# threshold, not again on every subsequent message while it stays crossed.
+
+[[alerts]]
+name = "line1-overheat"
+topic = "factory/line1/temperature"
+field = "value"
+operator = "greater_than"      # greater_than | greater_or_equal | less_than | less_or_equal | equal
+threshold = 80.0
+publish_topic = "alerts/line1/overheat"  # optional: republish the alert to MQTT
+# webhook_url = "https://example.com/hooks/cathub-alert"  # optional: POST the alert as JSON

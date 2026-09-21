@@ -12,13 +12,26 @@ actix-web = "4"
 # Async Runtime
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
 
-# MQTT (Embedded Broker)
+# MQTT (Embedded Broker + Ingestor)
 rumqttd = "0.18"
+
+# Modbus TCP -> MQTT Bridge
+tokio-modbus = { version = "0.17", features = ["tcp"] }
 
 # Database (Vault) - Support for Postgres, MySQL, SQLite
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "any", "postgres", "mysql", "sqlite", "chrono"] }
 dotenvy = "0.15"
+
+# In-memory latest-value cache (state snapshot for dashboards)
+dashmap = "6"
+
+# Alerting: webhook dispatch
+ureq = "3"
+
+# Config file (Modbus devices, alert rules)
+toml = "1"
 
 # Serialization & Utils
 serde = { version = "1.0", features = ["derive"] }
