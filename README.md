@@ -1,25 +1,46 @@
-# CatHub 🐈
+# CatHub
 
-**The All-in-One, Deterministic IIoT Realtime Hub**
+**A single-binary, deterministic realtime hub for Industrial IoT (IIoT).**
 
-CatHub is a blazing-fast, single-binary middleware designed specifically for Industrial IoT (IIoT). It eliminates the complex, resource-heavy chain of traditional IIoT architectures (Broker → Worker → Database → Web Server) by fusing them into one hyper-optimized Rust application.
+CatHub aims to collapse the typical IIoT ingestion stack — MQTT broker, worker, database, web server — into one Rust binary, so an edge gateway or small VPS can ingest, deduplicate, persist, and broadcast telemetry without an orchestration layer.
 
-## 🌟 The Vision
+> **Project status: early-stage / pre-alpha.** The HTTP server and database bootstrap are working; the MQTT broker and idempotent write path described in the vision below are not implemented yet. See [Current Status](#current-status) for what actually runs today.
 
-Industrial environments (like factories using Carlo Gavazzi UWP 4.0 gateways) require strict data determinism, zero duplication, and real-time visualization. CatHub solves the "integration spaghetti" by providing:
+## Table of Contents
 
-1. **Embedded MQTT Ingestor:** Devices connect directly to CatHub. No need to set up Mosquitto or EMQX.
-2. **Deterministic Vault:** Mathematically idempotent database writes to PostgreSQL/TimescaleDB. Say goodbye to duplicate telemetry data caused by flaky factory networks.
-3. **Real-time Broadcaster:** Built-in Server-Sent Events (SSE). Client-side applications can stream live sensor data with < 1ms latency, completely bypassing the database.
+- [Vision](#vision)
+- [Current Status](#current-status)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Configuration](#configuration)
+- [API Reference](#api-reference)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 🚀 Key Features
+## Vision
 
-- **Single Executable:** No JVM, no heavy runtimes. Drop the binary on an edge gateway or VPS, and it runs.
-- **Zero-GC Overhead:** Written in Rust, guaranteeing predictable CPU usage and constant low-memory footprint (typically < 20MB RAM) regardless of throughput.
-- **Absolute Idempotency:** Automatically buffers and converts MQTT JSON payloads into strictly structured `UPSERT` queries.
-- **Client-Ready:** The `/api/stream` endpoint provides a clean SSE stream out-of-the-box for instant client-side dashboard updates.
+Industrial environments (e.g. factories using Carlo Gavazzi UWP 4.0 gateways) need strict data determinism, zero duplication, and real-time visualization, without wiring together Mosquitto/EMQX, a worker process, a database, and a web server by hand. CatHub's target design:
 
-## 🏗️ Architecture
+1. **Embedded MQTT Ingestor** — devices connect directly to CatHub; no external broker to run.
+2. **Deterministic Vault** — idempotent writes to Postgres/MySQL/SQLite so duplicate telemetry (from flaky factory networks) never lands twice.
+3. **Real-time Broadcaster** — built-in Server-Sent Events (SSE) so dashboards can stream live data without hitting the database.
+
+## Current Status
+
+| Component | Status | Notes |
+|---|---|---|
+| HTTP server (Actix-Web) | ✅ Working | Binds on `0.0.0.0:3000` |
+| `GET /health` | ✅ Working | Reports process + DB status |
+| Database bootstrap (Postgres/MySQL/SQLite via `sqlx::Any`) | ✅ Working | Falls back to No-DB mode if `DATABASE_URL` is unset or unreachable |
+| `GET /api/stream` (SSE) | 🚧 Stub | Returns a static placeholder body, not a live stream |
+| Embedded MQTT broker (`rumqttd`) | 🚧 Not started | Dependency is present; broker task is unimplemented |
+| Idempotent write / dedup engine | 🚧 Not started | No ingestion or persistence logic yet |
+
+## Architecture
+
+The diagram below reflects the **target** architecture. Solid boxes exist today; the MQTT broker, idempotency engine, and live SSE stream are planned (see [Current Status](#current-status)).
 
 ```mermaid
 flowchart LR
@@ -31,7 +52,7 @@ flowchart LR
         Broker["Embedded MQTT Broker"]
         Engine["Idempotency Engine & Buffer"]
         SSE["Realtime Broadcaster"]
-        
+
         Broker --> Engine
         Engine --> SSE
     end
@@ -49,13 +70,85 @@ flowchart LR
     SSE -- "Event Stream (SSE)" --> ClientApp
 ```
 
-## 🛠️ Getting Started
+## Tech Stack
 
-*(Instructions on building and running the project will be added as the API stabilizes).*
+| Concern | Crate |
+|---|---|
+| HTTP server | [`actix-web`](https://crates.io/crates/actix-web) |
+| Async runtime | [`tokio`](https://crates.io/crates/tokio) |
+| MQTT broker (planned) | [`rumqttd`](https://crates.io/crates/rumqttd) |
+| Database access | [`sqlx`](https://crates.io/crates/sqlx) (`Any` driver: Postgres, MySQL, SQLite) |
+| Config | [`dotenvy`](https://crates.io/crates/dotenvy) |
+| Serialization | [`serde`](https://crates.io/crates/serde) / [`serde_json`](https://crates.io/crates/serde_json) |
+| Logging | [`tracing`](https://crates.io/crates/tracing) / [`tracing-subscriber`](https://crates.io/crates/tracing-subscriber) |
 
-## 💡 Why Rust?
+## Getting Started
 
-CatHub is built with Rust to provide the ultimate guarantees for infrastructure software: memory safety without garbage collection pauses, fearless concurrency, and predictable performance. It acts as the perfect "Shock Absorber" between high-frequency machine data and the rest of your enterprise stack.
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) (stable toolchain, 2021 edition)
+- Optionally, a Postgres, MySQL, or SQLite database if you want persistence instead of No-DB mode
+
+### Build & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/dhimasarista/cathub.git
+cd cathub
+
+# Copy the example environment file and adjust as needed
+cp .env.example .env
+
+# Run in debug mode
+cargo run
+
+# Or build an optimized release binary
+cargo build --release
+./target/release/cathub
+```
+
+On startup, CatHub logs whether it connected to a database or is running in No-DB mode, then starts listening on `http://0.0.0.0:3000`.
+
+### Verify it's running
+
+```bash
+curl http://localhost:3000/health
+# CatHub is running deterministically. DB Status: No-DB Mode
+```
+
+## Configuration
+
+CatHub is configured entirely through environment variables (loaded from `.env` via `dotenvy` if present). See [`.env.example`](.env.example) for the full list.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | No | *(unset)* | Postgres/MySQL/SQLite connection string. Omit to run in No-DB (broadcast-only) mode. |
+| `RUST_LOG` | No | `info` | Log verbosity for the `tracing` subscriber. |
+
+## API Reference
+
+| Method | Path | Status | Description |
+|---|---|---|---|
+| `GET` | `/health` | Stable | Returns process health and current DB connection status |
+| `GET` | `/api/stream` | Stub | Intended to serve a live SSE telemetry stream; currently returns a static placeholder |
+
+## Roadmap
+
+- [ ] Implement the embedded `rumqttd` broker as a real ingestion path
+- [ ] Design the idempotency/dedup strategy for the `Any`-driver vault (UPSERT semantics differ across Postgres/MySQL/SQLite, so this needs explicit per-backend handling)
+- [ ] Wire ingested MQTT messages into a broadcast channel consumed by `/api/stream`
+- [ ] Add integration tests for the HTTP layer and database fallback behavior
+- [ ] Add a CI workflow (`cargo check`, `cargo test`, `cargo clippy`)
+- [ ] Document deployment (systemd unit / container image) for edge gateways
+
+## Contributing
+
+This project is in early, active development. Issues and pull requests are welcome via [GitHub](https://github.com/dhimasarista/cathub).
+
+## License
+
+No license has been declared for this project yet. All rights reserved by the author until a license is added.
 
 ---
-*Built for the modern industrial edge.*
+
+*Built for the industrial edge.*
