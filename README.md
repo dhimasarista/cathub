@@ -23,30 +23,30 @@ Industrial environments (like factories using Carlo Gavazzi UWP 4.0 gateways) re
 
 ```mermaid
 flowchart LR
-    subgraph Edge[Factory Edge]
-        Gateway[IIoT Gateway\ne.g., UWP 4.0]
+    subgraph Edge ["Factory Edge"]
+        Gateway["IIoT Gateway (e.g., UWP 4.0)"]
     end
 
-    subgraph CatHub[CatHub (Single Rust Binary)]
-        Broker[Embedded MQTT\nPort 1883]
-        Engine[Idempotency Engine\n& Buffer]
-        SSE[Axum SSE Broadcaster\nPort 3000]
+    subgraph CatHub ["CatHub (Single Rust Binary)"]
+        Broker["Embedded MQTT (Port 1883)"]
+        Engine["Idempotency Engine & Buffer"]
+        SSE["Actix SSE Broadcaster (Port 3000)"]
         
         Broker --> Engine
         Engine --> SSE
     end
 
-    subgraph Storage[Data Layer]
-        DB[(PostgreSQL /\nTimescaleDB)]
+    subgraph Storage ["Data Layer"]
+        DB[("PostgreSQL / TimescaleDB")]
     end
 
-    subgraph Frontend[Client Layer]
-        React[React Dashboard]
+    subgraph Frontend ["Client Layer"]
+        React["React Dashboard"]
     end
 
-    Gateway -- MQTT (QoS 1) --> Broker
-    Engine -- UPSERT (No Duplicates) --> DB
-    SSE -- Realtime Stream --> React
+    Gateway -- "MQTT (QoS 1)" --> Broker
+    Engine -- "UPSERT (No Duplicates)" --> DB
+    SSE -- "Realtime Stream" --> React
 ```
 
 ## 🛠️ Getting Started
